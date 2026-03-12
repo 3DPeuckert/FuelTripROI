@@ -15,6 +15,10 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  body {
+    @apply bg-white dark:bg-gray-900 transition-colors duration-200;
+  }
+
   /* Remove spinner from number inputs for a cleaner look */
   input[type='number']::-webkit-inner-spin-button,
   input[type='number']::-webkit-outer-spin-button {

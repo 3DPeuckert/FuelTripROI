@@ -78,8 +78,8 @@ export function ExtraCostsForm() {
         hint="Any other costs"
       />
       {total > 0 && (
-        <div className="sm:col-span-2 pt-1 border-t border-purple-100">
-          <p className="text-sm font-semibold text-purple-700">
+        <div className="sm:col-span-2 pt-1 border-t border-purple-100 dark:border-purple-900">
+          <p className="text-sm font-semibold text-purple-700 dark:text-purple-400">
             Total extras: {formatCurrency(total, currency)}
           </p>
         </div>

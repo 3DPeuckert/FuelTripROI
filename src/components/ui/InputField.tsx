@@ -45,7 +45,7 @@ export function InputField({
 
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={fieldId} className="text-sm font-medium text-gray-700">
+      <label htmlFor={fieldId} className="text-sm font-medium text-gray-700 dark:text-gray-300">
         {label}
       </label>
       <div className="relative flex items-center">
@@ -64,17 +64,17 @@ export function InputField({
             'focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent',
             unit ? 'pr-12' : '',
             disabled
-              ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-              : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400',
+              ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed dark:bg-gray-800 dark:text-gray-500 dark:border-gray-700'
+              : 'bg-white border-gray-300 text-gray-900 hover:border-gray-400 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 dark:hover:border-gray-500 dark:placeholder-gray-500',
           ].join(' ')}
         />
         {unit && (
-          <span className="absolute right-3 text-xs font-medium text-gray-400 pointer-events-none select-none">
+          <span className="absolute right-3 text-xs font-medium text-gray-400 dark:text-gray-500 pointer-events-none select-none">
             {unit}
           </span>
         )}
       </div>
-      {hint && <p className="text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="text-xs text-gray-400 dark:text-gray-500">{hint}</p>}
     </div>
   )
 }

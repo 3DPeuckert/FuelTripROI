@@ -16,7 +16,7 @@ export function ActualMeasurementsForm() {
     <SectionCard title="Actual Measurements" icon={ClipboardCheck} accent="blue">
       <div className="sm:col-span-2 space-y-4">
         {/* Actual fuel used */}
-        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
+        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 dark:bg-blue-900/20 dark:border-blue-800">
           <Toggle
             checked={actualMeasurements.overrideFuelUsed}
             onChange={(v) => updateActual({ overrideFuelUsed: v })}
@@ -37,7 +37,7 @@ export function ActualMeasurementsForm() {
         </div>
 
         {/* Actual foreign price */}
-        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
+        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 dark:bg-blue-900/20 dark:border-blue-800">
           <Toggle
             checked={actualMeasurements.overrideForeignPrice}
             onChange={(v) => updateActual({ overrideForeignPrice: v })}
@@ -58,7 +58,7 @@ export function ActualMeasurementsForm() {
         </div>
 
         {/* Actual litres refuelled */}
-        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
+        <div className="flex flex-col gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100 dark:bg-blue-900/20 dark:border-blue-800">
           <Toggle
             checked={actualMeasurements.overrideLitersRefuelled}
             onChange={(v) => updateActual({ overrideLitersRefuelled: v })}
