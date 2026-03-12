@@ -10,7 +10,7 @@ import { VehicleForm } from './VehicleForm'
 import { TripForm } from './TripForm'
 import { FuelForm } from './FuelForm'
 import { ExtraCostsForm } from './ExtraCostsForm'
-import { ActualMeasurementsForm } from './ActualMeasurementsForm'
+import { AfterTripForm } from './AfterTripForm'
 import { ResultsPanel } from './ResultsPanel'
 import { CurrencySelector } from './CurrencySelector'
 
@@ -73,12 +73,18 @@ export function CalculatorPanel() {
               <ModeSelector />
             </div>
 
-            {/* Form sections */}
-            <VehicleForm />
-            <TripForm />
-            <FuelForm />
-            <ExtraCostsForm />
-            {mode === 'analysis' && <ActualMeasurementsForm />}
+            {/* Planning mode forms */}
+            {mode === 'planning' && (
+              <>
+                <VehicleForm />
+                <TripForm />
+                <FuelForm />
+                <ExtraCostsForm />
+              </>
+            )}
+
+            {/* Analysis mode: dedicated after-trip sections */}
+            {mode === 'analysis' && <AfterTripForm />}
           </div>
 
           {/* Right column: results (sticky on desktop) */}

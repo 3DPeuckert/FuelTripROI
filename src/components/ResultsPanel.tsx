@@ -2,7 +2,7 @@
  * Results panel — the core financial summary shown to the user.
  */
 
-import { TrendingUp, TrendingDown, AlertCircle, Gauge, Route, Fuel, BarChart3 } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertCircle, Gauge, Route, Fuel, BarChart3, ArrowRight } from 'lucide-react'
 import { useCalculatorStore } from '../store/calculatorStore'
 import {
   formatCurrency,
@@ -12,6 +12,7 @@ import {
   formatDistance,
   formatPercent,
 } from '../utils/formatters'
+import type { AfterTripDetail } from '../types/calculatorTypes'
 
 // ─── Individual stat tile ──────────────────────────────────────────────────────
 
@@ -50,7 +51,7 @@ function StatTile({ label, value, sub, positive, icon }: StatTileProps) {
   )
 }
 
-// ─── Break-even section ────────────────────────────────────────────────────────
+// ─── Break-even section (planning only) ───────────────────────────────────────
 
 function BreakEvenSection() {
   const { result, currency } = useCalculatorStore()
@@ -99,6 +100,67 @@ function BreakEvenSection() {
   )
 }
 
+// ─── After-trip detail section (analysis only) ────────────────────────────────
+
+function AfterTripDetailSection({ detail, currency }: { detail: AfterTripDetail; currency: string }) {
+  return (
+    <div className="mt-4 rounded-xl border-2 border-blue-200 bg-blue-50/50 dark:border-blue-700 dark:bg-blue-900/10 p-4">
+      <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-3 flex items-center gap-2">
+        <ArrowRight size={14} />
+        Trip Fuel Detail
+      </h3>
+
+      {/* Outbound / Return split */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">Outbound</span>
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+            {formatDistance(detail.outboundDistanceKm)}
+          </span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {formatLitres(detail.outboundFuelL)} @ home price
+          </span>
+          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            Cost: {formatCurrency(detail.outboundFuelCost, currency)}
+          </span>
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide">Return</span>
+          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+            {formatDistance(detail.returnDistanceKm)}
+          </span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {formatLitres(detail.returnFuelL)} from tank
+          </span>
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            (included in purchase cost)
+          </span>
+        </div>
+      </div>
+
+      {/* Tank state */}
+      <div className="border-t border-blue-100 dark:border-blue-800 pt-3">
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2 font-medium">Tank State</p>
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs text-gray-400 dark:text-gray-500">Departure</span>
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+              {formatLitres(detail.fuelAtDepartureL)}
+            </span>
+          </div>
+          <ArrowRight size={14} className="text-gray-300 dark:text-gray-600 shrink-0" />
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs text-gray-400 dark:text-gray-500">Return</span>
+            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">
+              {formatLitres(detail.fuelAfterReturnL)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Cost breakdown bar ────────────────────────────────────────────────────────
 
 function CostBreakdown() {
@@ -117,7 +179,7 @@ function CostBreakdown() {
 
   return (
     <div className="mt-4 rounded-xl border-2 border-gray-200 bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 p-4">
-      <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3">Trip Cost Breakdown</h3>
+      <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3">Trip Overhead Breakdown</h3>
       <div className="flex h-4 rounded-full overflow-hidden gap-0.5">
         {items.map((item) => (
           <div
@@ -150,6 +212,7 @@ export function ResultsPanel() {
   if (!result) return null
 
   const { trip, isWorthIt } = result
+  const isAnalysis = mode === 'analysis'
 
   return (
     <div className="rounded-xl border-2 border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700 shadow-sm p-5 transition-colors">
@@ -174,10 +237,10 @@ export function ResultsPanel() {
               isWorthIt ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400',
             ].join(' ')}
           >
-            {isWorthIt ? 'This trip saves you money!' : 'You lose money on this trip.'}
+            {isWorthIt ? 'This trip saved you money!' : 'You lost money on this trip.'}
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {mode === 'planning' ? 'Estimated result' : 'Actual result based on real values'}
+            {isAnalysis ? 'Actual result based on real measured data' : 'Estimated result'}
           </p>
         </div>
         {!isWorthIt && (
@@ -192,8 +255,8 @@ export function ResultsPanel() {
           value={formatSavings(trip.savings, currency)}
           sub={
             isWorthIt
-              ? `You save ${formatCurrency(trip.savings, currency)}`
-              : `You lose ${formatCurrency(Math.abs(trip.savings), currency)}`
+              ? `Saved ${formatCurrency(trip.savings, currency)}`
+              : `Lost ${formatCurrency(Math.abs(trip.savings), currency)}`
           }
           positive={isWorthIt ? true : false}
           icon={isWorthIt ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
@@ -201,26 +264,26 @@ export function ResultsPanel() {
         <StatTile
           label="Effective Price/L"
           value={formatPricePerLitre(trip.effectivePricePerL, currency)}
-          sub="incl. all trip costs"
+          sub="incl. all overhead"
           positive={null}
           icon={<Fuel size={16} />}
         />
         <StatTile
           label="Trip ROI"
           value={formatPercent(trip.roiPercent)}
-          sub="return on trip investment"
+          sub="return on investment"
           positive={trip.roiPercent > 0 ? true : trip.roiPercent < 0 ? false : null}
           icon={<Gauge size={16} />}
         />
         <StatTile
-          label="Total Trip Cost"
+          label="Trip Overhead"
           value={formatCurrency(trip.tripTotalCost, currency)}
-          sub="fuel + extras + wear"
+          sub={isAnalysis ? 'outbound fuel + extras + wear' : 'fuel + extras + wear'}
           positive={null}
           icon={<Route size={16} />}
         />
         <StatTile
-          label="Trip Fuel Used"
+          label={isAnalysis ? 'Fuel Consumed' : 'Trip Fuel Used'}
           value={formatLitres(trip.tripFuelUsedL)}
           sub={`${formatDistance(trip.tripDistanceTotalKm)} total`}
           positive={null}
@@ -228,7 +291,7 @@ export function ResultsPanel() {
         <StatTile
           label="Cost per km"
           value={formatCurrency(trip.costPerKm, currency) + '/km'}
-          sub="trip operating cost"
+          sub="trip overhead / km"
           positive={null}
         />
       </div>
@@ -236,14 +299,18 @@ export function ResultsPanel() {
       {/* Refuel comparison */}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-xl bg-gray-50 border border-gray-200 dark:bg-gray-700/50 dark:border-gray-600 p-3">
-          <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Refuel at Home</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">
+            {isAnalysis ? 'Local Equivalent' : 'Refuel at Home'}
+          </p>
           <p className="text-lg font-bold text-gray-700 dark:text-gray-200">
             {formatCurrency(trip.homeRefuelCost, currency)}
           </p>
           <p className="text-xs text-gray-400 dark:text-gray-500">{formatLitres(trip.totalRefuelLiters)}</p>
         </div>
         <div className="rounded-xl bg-gray-50 border border-gray-200 dark:bg-gray-700/50 dark:border-gray-600 p-3">
-          <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">Refuel Abroad</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">
+            {isAnalysis ? 'Paid Abroad' : 'Refuel Abroad'}
+          </p>
           <p className="text-lg font-bold text-gray-700 dark:text-gray-200">
             {formatCurrency(trip.foreignRefuelCost, currency)}
           </p>
@@ -254,7 +321,14 @@ export function ResultsPanel() {
       </div>
 
       <CostBreakdown />
-      <BreakEvenSection />
+
+      {/* Analysis: trip fuel detail + tank state */}
+      {isAnalysis && trip.afterTripDetail && (
+        <AfterTripDetailSection detail={trip.afterTripDetail} currency={currency} />
+      )}
+
+      {/* Planning: break-even analysis */}
+      {!isAnalysis && <BreakEvenSection />}
     </div>
   )
 }

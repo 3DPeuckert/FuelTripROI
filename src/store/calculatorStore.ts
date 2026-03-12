@@ -14,7 +14,7 @@ import type {
   TripData,
   FuelData,
   ExtraCosts,
-  ActualMeasurements,
+  AfterTripData,
   FullCalculationResult,
 } from '../types/calculatorTypes'
 import { runCalculation } from '../lib/fuelCalculations'
@@ -54,13 +54,45 @@ const defaultExtraCosts: ExtraCosts = {
   miscCost: 0,
 }
 
-const defaultActual: ActualMeasurements = {
-  actualFuelUsedL: 0,
-  actualForeignPricePerL: 0,
-  actualLitersRefuelled: 0,
-  overrideFuelUsed: false,
-  overrideForeignPrice: false,
-  overrideLitersRefuelled: false,
+export const defaultAfterTrip: AfterTripData = {
+  // Vehicle
+  actualConsumptionL100km: 7,
+  vehicleCostPerKm: 0.08,
+  includeVehicleWear: false,
+
+  // Trip distances
+  distanceToStationKm: 30,
+  actualDistanceTotalKm: 60,
+
+  // Tank state
+  tankCapacityL: 50,
+  tankLevelAtDeparturePercent: 30,
+  tankLevelAfterReturnPercent: 25,
+
+  // Fuel purchased abroad
+  foreignPricePerL: 1.35,
+  litersFilled: 40,
+  extraCanisterLiters: 0,
+  totalPaidForeign: 0,
+  useTotalPaidForeign: false,
+
+  // Domestic comparison
+  homePricePerL: 1.65,
+
+  // Extra costs
+  tollCost: 0,
+  parkingCost: 0,
+  foodCost: 0,
+  restroomCost: 0,
+  currencyExchangeFee: 0,
+  miscCost: 0,
+}
+
+/** Neutral break-even used in analysis mode (planning-only concept). */
+const nullBreakEven = {
+  breakEvenPriceDiff: Infinity,
+  breakEvenLiters: Infinity,
+  breakEvenDistanceKm: Infinity,
 }
 
 // ─── Store interface ───────────────────────────────────────────────────────────
@@ -72,7 +104,7 @@ interface CalculatorStore extends CalculatorState {
   updateTrip: (partial: Partial<TripData>) => void
   updateFuel: (partial: Partial<FuelData>) => void
   updateExtraCosts: (partial: Partial<ExtraCosts>) => void
-  updateActual: (partial: Partial<ActualMeasurements>) => void
+  updateAfterTrip: (partial: Partial<AfterTripData>) => void
   setCurrency: (currency: string) => void
   recalculate: () => void
   reset: () => void
@@ -86,11 +118,18 @@ function compute(
   trip: TripData,
   fuel: FuelData,
   extras: ExtraCosts,
-  actual: ActualMeasurements
+  afterTrip: AfterTripData
 ): FullCalculationResult {
-  const tripResult = runCalculation(mode, vehicle, trip, fuel, extras, actual)
-  const breakEven = calculateBreakEven(vehicle, trip, fuel, extras)
-  const priceDifferencePerL = fuel.homeFuelPricePerL - fuel.foreignFuelPricePerL
+  const tripResult = runCalculation(mode, vehicle, trip, fuel, extras, afterTrip)
+
+  // Break-even is only meaningful in planning mode
+  const breakEven =
+    mode === 'planning' ? calculateBreakEven(vehicle, trip, fuel, extras) : nullBreakEven
+
+  const priceDifferencePerL =
+    mode === 'planning'
+      ? fuel.homeFuelPricePerL - fuel.foreignFuelPricePerL
+      : afterTrip.homePricePerL - afterTrip.foreignPricePerL
 
   return {
     trip: tripResult,
@@ -109,21 +148,21 @@ export const useCalculatorStore = create<CalculatorStore>((set, get) => ({
   trip: defaultTrip,
   fuel: defaultFuel,
   extraCosts: defaultExtraCosts,
-  actualMeasurements: defaultActual,
+  afterTrip: defaultAfterTrip,
   currency: '€',
-  result: compute('planning', defaultVehicle, defaultTrip, defaultFuel, defaultExtraCosts, defaultActual),
+  result: compute('planning', defaultVehicle, defaultTrip, defaultFuel, defaultExtraCosts, defaultAfterTrip),
 
   setMode: (mode) => {
     set({ mode })
     const s = get()
-    set({ result: compute(mode, s.vehicle, s.trip, s.fuel, s.extraCosts, s.actualMeasurements) })
+    set({ result: compute(mode, s.vehicle, s.trip, s.fuel, s.extraCosts, s.afterTrip) })
   },
 
   updateVehicle: (partial) => {
     const vehicle = { ...get().vehicle, ...partial }
     set({ vehicle })
     const s = get()
-    set({ result: compute(s.mode, vehicle, s.trip, s.fuel, s.extraCosts, s.actualMeasurements) })
+    set({ result: compute(s.mode, vehicle, s.trip, s.fuel, s.extraCosts, s.afterTrip) })
   },
 
   updateTrip: (partial) => {
@@ -137,30 +176,28 @@ export const useCalculatorStore = create<CalculatorStore>((set, get) => ({
 
     set({ trip })
     const s = get()
-    set({ result: compute(s.mode, s.vehicle, trip, s.fuel, s.extraCosts, s.actualMeasurements) })
+    set({ result: compute(s.mode, s.vehicle, trip, s.fuel, s.extraCosts, s.afterTrip) })
   },
 
   updateFuel: (partial) => {
     const fuel = { ...get().fuel, ...partial }
     set({ fuel })
     const s = get()
-    set({ result: compute(s.mode, s.vehicle, s.trip, fuel, s.extraCosts, s.actualMeasurements) })
+    set({ result: compute(s.mode, s.vehicle, s.trip, fuel, s.extraCosts, s.afterTrip) })
   },
 
   updateExtraCosts: (partial) => {
     const extraCosts = { ...get().extraCosts, ...partial }
     set({ extraCosts })
     const s = get()
-    set({ result: compute(s.mode, s.vehicle, s.trip, s.fuel, extraCosts, s.actualMeasurements) })
+    set({ result: compute(s.mode, s.vehicle, s.trip, s.fuel, extraCosts, s.afterTrip) })
   },
 
-  updateActual: (partial) => {
-    const actualMeasurements = { ...get().actualMeasurements, ...partial }
-    set({ actualMeasurements })
+  updateAfterTrip: (partial) => {
+    const afterTrip = { ...get().afterTrip, ...partial }
+    set({ afterTrip })
     const s = get()
-    set({
-      result: compute(s.mode, s.vehicle, s.trip, s.fuel, s.extraCosts, actualMeasurements),
-    })
+    set({ result: compute(s.mode, s.vehicle, s.trip, s.fuel, s.extraCosts, afterTrip) })
   },
 
   setCurrency: (currency) => set({ currency }),
@@ -168,19 +205,19 @@ export const useCalculatorStore = create<CalculatorStore>((set, get) => ({
   recalculate: () => {
     const s = get()
     set({
-      result: compute(s.mode, s.vehicle, s.trip, s.fuel, s.extraCosts, s.actualMeasurements),
+      result: compute(s.mode, s.vehicle, s.trip, s.fuel, s.extraCosts, s.afterTrip),
     })
   },
 
   reset: () => {
-    const result = compute('planning', defaultVehicle, defaultTrip, defaultFuel, defaultExtraCosts, defaultActual)
+    const result = compute('planning', defaultVehicle, defaultTrip, defaultFuel, defaultExtraCosts, defaultAfterTrip)
     set({
       mode: 'planning',
       vehicle: defaultVehicle,
       trip: defaultTrip,
       fuel: defaultFuel,
       extraCosts: defaultExtraCosts,
-      actualMeasurements: defaultActual,
+      afterTrip: defaultAfterTrip,
       currency: '€',
       result,
     })

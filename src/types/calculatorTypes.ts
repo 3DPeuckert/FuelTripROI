@@ -2,7 +2,7 @@
 
 export type CalculatorMode = 'planning' | 'analysis'
 
-// ─── Vehicle Data ──────────────────────────────────────────────────────────────
+// ─── Vehicle Data (planning mode) ─────────────────────────────────────────────
 
 export interface VehicleData {
   /** Average fuel consumption in litres per 100 km */
@@ -21,7 +21,7 @@ export interface VehicleData {
   includeVehicleWear: boolean
 }
 
-// ─── Trip Data ─────────────────────────────────────────────────────────────────
+// ─── Trip Data (planning mode) ─────────────────────────────────────────────────
 
 export interface TripData {
   /** One-way distance to the foreign fuel station in km */
@@ -39,7 +39,7 @@ export interface TripData {
   borderWaitTimeMinutes: number
 }
 
-// ─── Fuel Data ─────────────────────────────────────────────────────────────────
+// ─── Fuel Data (planning mode) ─────────────────────────────────────────────────
 
 export interface FuelData {
   /** Fuel price at home country per litre */
@@ -52,7 +52,7 @@ export interface FuelData {
   extraCanisterLiters: number
 }
 
-// ─── Extra Costs ───────────────────────────────────────────────────────────────
+// ─── Extra Costs (shared by both modes) ───────────────────────────────────────
 
 export interface ExtraCosts {
   /** Road toll costs */
@@ -69,59 +69,121 @@ export interface ExtraCosts {
   miscCost: number
 }
 
-// ─── Analysis-mode actual measurements ────────────────────────────────────────
+// ─── After-Trip Data (analysis mode) ──────────────────────────────────────────
 
-export interface ActualMeasurements {
-  /** Actual fuel used during the trip (measured, not calculated) */
-  actualFuelUsedL: number
-  /** Actual fuel price paid abroad */
-  actualForeignPricePerL: number
-  /** Actual litres refuelled */
-  actualLitersRefuelled: number
-  /** Whether to override calculated fuel usage with actual */
-  overrideFuelUsed: boolean
-  /** Whether to override foreign price with actual paid price */
-  overrideForeignPrice: boolean
-  /** Whether to override litres refuelled with actual amount */
-  overrideLitersRefuelled: boolean
+export interface AfterTripData {
+  // ── Vehicle ─────────────────────────────────────────────────────────────────
+  /** Actual measured fuel consumption for this trip (L/100km) */
+  actualConsumptionL100km: number
+  /** Vehicle operating cost per km (maintenance, tires, oil, depreciation) */
+  vehicleCostPerKm: number
+  /** Whether to include vehicle wear cost */
+  includeVehicleWear: boolean
+
+  // ── Trip distances ───────────────────────────────────────────────────────────
+  /** One-way distance driven to the foreign station (km) */
+  distanceToStationKm: number
+  /**
+   * Total actual distance driven (km).
+   * Return leg = actualDistanceTotalKm − distanceToStationKm
+   */
+  actualDistanceTotalKm: number
+
+  // ── Tank state (partial tank logic) ─────────────────────────────────────────
+  /** Tank capacity in litres */
+  tankCapacityL: number
+  /** Tank fill level when leaving home (0–100 %) */
+  tankLevelAtDeparturePercent: number
+  /** Tank fill level on arriving home (0–100 %) */
+  tankLevelAfterReturnPercent: number
+
+  // ── Fuel purchased abroad ────────────────────────────────────────────────────
+  /** Price per litre at the foreign pump */
+  foreignPricePerL: number
+  /** Litres pumped into the vehicle tank abroad */
+  litersFilled: number
+  /** Extra litres carried in canisters */
+  extraCanisterLiters: number
+  /**
+   * Actual total amount shown on the receipt.
+   * When useTotalPaidForeign is true, this overrides the calculated cost.
+   */
+  totalPaidForeign: number
+  /**
+   * If true, use totalPaidForeign as the foreign fuel cost.
+   * If false, calculate from foreignPricePerL × total litres.
+   */
+  useTotalPaidForeign: boolean
+
+  // ── Domestic comparison ──────────────────────────────────────────────────────
+  /** Fuel price at home station (for the domestic equivalent comparison) */
+  homePricePerL: number
+
+  // ── Extra costs ──────────────────────────────────────────────────────────────
+  tollCost: number
+  parkingCost: number
+  foodCost: number
+  restroomCost: number
+  currencyExchangeFee: number
+  miscCost: number
 }
 
 // ─── Calculation Results ───────────────────────────────────────────────────────
 
 export interface TripCalculationResult {
   // ── Derived trip data ────────────────────────────────────────────────────────
-  /** Effective trip distance including detour */
+  /** Effective total trip distance */
   tripDistanceTotalKm: number
-  /** Fuel used during the trip itself */
+  /** Fuel used during the trip itself (not including purchased fuel) */
   tripFuelUsedL: number
-  /** Cost of fuel used for the trip (at home price) */
+  /**
+   * Fuel cost attributed to the trip.
+   * Planning: all trip fuel at home price.
+   * Analysis: outbound leg fuel at home price only.
+   */
   tripFuelCost: number
 
   // ── Refuelling costs ─────────────────────────────────────────────────────────
-  /** Total litres being refuelled (vehicle + canisters) */
+  /** Total litres purchased abroad (tank + canisters) */
   totalRefuelLiters: number
-  /** Cost of the same fuel quantity at home */
+  /** What the same quantity would cost at the domestic price */
   homeRefuelCost: number
-  /** Cost of refuelling abroad */
+  /** Actual cost of the foreign fuel purchase */
   foreignRefuelCost: number
 
   // ── Costs ────────────────────────────────────────────────────────────────────
-  /** Total vehicle wear cost for the trip */
+  /** Total vehicle wear cost */
   vehicleCostTotal: number
   /** Sum of all extra costs */
   extraCostTotal: number
-  /** Total trip cost (fuel + extras + vehicle wear) */
+  /** Total trip overhead (trip fuel + extras + vehicle wear) */
   tripTotalCost: number
 
-  // ── Result metrics ───────────────────────────────────────────────────────────
+  // ── Result metrics ────────────────────────────────────────────────────────────
   /** Net savings (positive) or loss (negative) */
   savings: number
-  /** True cost per litre including all trip costs */
+  /** True cost per litre including all trip overhead */
   effectivePricePerL: number
   /** Trip ROI as a percentage */
   roiPercent: number
-  /** Cost per km of the trip */
+  /** Trip overhead cost per kilometre driven */
   costPerKm: number
+
+  // ── After-trip detail (only populated in analysis mode) ───────────────────────
+  afterTripDetail?: AfterTripDetail
+}
+
+/** Extra breakdown fields produced exclusively by calculateAfterTrip. */
+export interface AfterTripDetail {
+  outboundDistanceKm: number
+  returnDistanceKm: number
+  outboundFuelL: number
+  returnFuelL: number
+  outboundFuelCost: number
+  /** Litres in tank when leaving home */
+  fuelAtDepartureL: number
+  /** Litres in tank on arriving home */
+  fuelAfterReturnL: number
 }
 
 export interface BreakEvenResult {
@@ -129,7 +191,7 @@ export interface BreakEvenResult {
   breakEvenPriceDiff: number
   /** Minimum litres needed to refuel to break even */
   breakEvenLiters: number
-  /** Minimum distance that makes the trip worthwhile */
+  /** Minimum distance at which the trip is worthwhile */
   breakEvenDistanceKm: number
 }
 
@@ -149,7 +211,7 @@ export interface CalculatorState {
   trip: TripData
   fuel: FuelData
   extraCosts: ExtraCosts
-  actualMeasurements: ActualMeasurements
+  afterTrip: AfterTripData
   currency: string
   result: FullCalculationResult | null
 }

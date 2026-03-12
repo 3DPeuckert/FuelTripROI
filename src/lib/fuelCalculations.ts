@@ -12,7 +12,7 @@ import type {
   TripData,
   FuelData,
   ExtraCosts,
-  ActualMeasurements,
+  AfterTripData,
   TripCalculationResult,
   CalculatorMode,
 } from '../types/calculatorTypes'
@@ -165,7 +165,7 @@ export function calcCostPerKm(tripTotalCost: number, tripDistanceTotalKm: number
   return tripTotalCost / tripDistanceTotalKm
 }
 
-// ─── Orchestrator ──────────────────────────────────────────────────────────────
+// ─── Planning mode orchestrator ────────────────────────────────────────────────
 
 /**
  * Run the complete trip calculation for planning mode (estimated values).
@@ -218,53 +218,87 @@ export function calculateTrip(
   }
 }
 
+// ─── After-Trip (analysis) mode orchestrator ───────────────────────────────────
+
 /**
- * Run the complete trip calculation for analysis mode (actual measured values).
- * Overrides estimated values with actuals where the user has provided them.
+ * Run the complete trip calculation for after-trip analysis mode.
+ *
+ * Key differences from planning mode:
+ *
+ * 1. Trip fuel cost = outbound leg only, at domestic price.
+ *    The outbound leg is driven on expensive home fuel.
+ *    The return leg is driven on the cheaper foreign fuel already purchased
+ *    (accounted for in foreignRefuelCost / totalPaidForeign), so it is NOT
+ *    double-counted as a trip overhead cost.
+ *
+ * 2. Foreign fuel cost comes from the actual receipt total when
+ *    useTotalPaidForeign is true, otherwise calculated from price × litres.
+ *
+ * 3. Partial tank state is tracked for information and validation but does
+ *    not alter the core financial calculation.
+ *
+ * Formula summary:
+ *   outbound_fuel_l    = (distanceToStation / 100) × consumption
+ *   outbound_fuel_cost = outbound_fuel_l × homePricePerL
+ *   vehicle_wear       = vehicleCostPerKm × actualDistanceTotal
+ *   extra_cost_total   = sum of all extra costs
+ *   trip_total_cost    = outbound_fuel_cost + vehicle_wear + extra_cost_total
+ *   foreign_fuel_cost  = totalPaidForeign OR (totalForeignFuelL × foreignPricePerL)
+ *   domestic_equiv     = totalForeignFuelL × homePricePerL
+ *   savings            = domestic_equiv − (foreign_fuel_cost + trip_total_cost)
+ *   effective_price/L  = (foreign_fuel_cost + trip_total_cost) / totalForeignFuelL
  */
-export function calculateTripAnalysis(
-  vehicle: VehicleData,
-  trip: TripData,
-  fuel: FuelData,
-  extras: ExtraCosts,
-  actual: ActualMeasurements
-): TripCalculationResult {
-  const tripDistanceTotalKm = calcTripDistanceTotal(trip)
+export function calculateAfterTrip(data: AfterTripData): TripCalculationResult {
+  // ── Distances ────────────────────────────────────────────────────────────────
+  const outboundDistanceKm = data.distanceToStationKm
+  const returnDistanceKm = Math.max(0, data.actualDistanceTotalKm - outboundDistanceKm)
+  const tripDistanceTotalKm = data.actualDistanceTotalKm
 
-  const tripFuelUsedL = actual.overrideFuelUsed
-    ? actual.actualFuelUsedL
-    : calcTripFuelUsed(tripDistanceTotalKm, vehicle.averageConsumptionL100km)
+  // ── Fuel consumed during the trip ────────────────────────────────────────────
+  const tripFuelUsedL = calcTripFuelUsed(tripDistanceTotalKm, data.actualConsumptionL100km)
+  const outboundFuelL = calcTripFuelUsed(outboundDistanceKm, data.actualConsumptionL100km)
+  const returnFuelL = Math.max(0, tripFuelUsedL - outboundFuelL)
 
-  const tripFuelCost = calcTripFuelCost(tripFuelUsedL, fuel.homeFuelPricePerL)
+  // Only the outbound leg is costed at the home price (you left on expensive
+  // domestic fuel). The return leg is already captured in foreignRefuelCost.
+  const outboundFuelCost = outboundFuelL * data.homePricePerL
+  const tripFuelCost = outboundFuelCost
 
-  const effectiveForeignPrice = actual.overrideForeignPrice
-    ? actual.actualForeignPricePerL
-    : fuel.foreignFuelPricePerL
+  // ── Foreign fuel purchase ────────────────────────────────────────────────────
+  const totalRefuelLiters = data.litersFilled + data.extraCanisterLiters
+  const foreignRefuelCost = data.useTotalPaidForeign
+    ? data.totalPaidForeign
+    : totalRefuelLiters * data.foreignPricePerL
 
-  const effectiveRefuelLiters = actual.overrideLitersRefuelled
-    ? actual.actualLitersRefuelled
-    : fuel.litersToRefuelVehicle + fuel.extraCanisterLiters
+  // ── Domestic comparison ──────────────────────────────────────────────────────
+  const homeRefuelCost = totalRefuelLiters * data.homePricePerL
 
-  const totalRefuelLiters = effectiveRefuelLiters
-  const homeRefuelCost = calcHomeRefuelCost(totalRefuelLiters, fuel.homeFuelPricePerL)
-  const foreignRefuelCost = calcForeignRefuelCost(totalRefuelLiters, effectiveForeignPrice)
-
+  // ── Trip overhead costs ──────────────────────────────────────────────────────
   const vehicleCostTotal = calcVehicleCostTotal(
     tripDistanceTotalKm,
-    vehicle.vehicleCostPerKm,
-    vehicle.includeVehicleWear
+    data.vehicleCostPerKm,
+    data.includeVehicleWear
   )
-  const extraCostTotal = calcExtraCostTotal(extras)
+
+  const extraCostTotal =
+    data.tollCost +
+    data.parkingCost +
+    data.foodCost +
+    data.restroomCost +
+    data.currencyExchangeFee +
+    data.miscCost
+
   const tripTotalCost = calcTripTotalCost(tripFuelCost, extraCostTotal, vehicleCostTotal)
 
+  // ── Savings & metrics ────────────────────────────────────────────────────────
   const savings = calcSavings(homeRefuelCost, foreignRefuelCost, tripTotalCost)
-  const effectivePricePerL = calcEffectivePricePerL(
-    foreignRefuelCost,
-    tripTotalCost,
-    totalRefuelLiters
-  )
+  const effectivePricePerL = calcEffectivePricePerL(foreignRefuelCost, tripTotalCost, totalRefuelLiters)
   const roiPercent = calcRoiPercent(savings, foreignRefuelCost)
   const costPerKm = calcCostPerKm(tripTotalCost, tripDistanceTotalKm)
+
+  // ── Tank state (informational) ───────────────────────────────────────────────
+  const fuelAtDepartureL = (data.tankLevelAtDeparturePercent / 100) * data.tankCapacityL
+  const fuelAfterReturnL = (data.tankLevelAfterReturnPercent / 100) * data.tankCapacityL
 
   return {
     tripDistanceTotalKm,
@@ -280,8 +314,19 @@ export function calculateTripAnalysis(
     effectivePricePerL,
     roiPercent,
     costPerKm,
+    afterTripDetail: {
+      outboundDistanceKm,
+      returnDistanceKm,
+      outboundFuelL,
+      returnFuelL,
+      outboundFuelCost,
+      fuelAtDepartureL,
+      fuelAfterReturnL,
+    },
   }
 }
+
+// ─── Mode dispatcher ───────────────────────────────────────────────────────────
 
 /**
  * Convenience dispatcher that selects the correct calculation function
@@ -293,10 +338,10 @@ export function runCalculation(
   trip: TripData,
   fuel: FuelData,
   extras: ExtraCosts,
-  actual: ActualMeasurements
+  afterTrip: AfterTripData
 ): TripCalculationResult {
   if (mode === 'analysis') {
-    return calculateTripAnalysis(vehicle, trip, fuel, extras, actual)
+    return calculateAfterTrip(afterTrip)
   }
   return calculateTrip(vehicle, trip, fuel, extras)
 }
