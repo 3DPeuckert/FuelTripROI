@@ -53,7 +53,7 @@ export function TripForm() {
                 totalDistanceOverridden: false,
               })
             }
-            className="text-xs text-brand-600 hover:underline text-left"
+            className="text-xs text-brand-600 dark:text-brand-400 hover:underline text-left"
           >
             ↺ Reset to auto (×2)
           </button>

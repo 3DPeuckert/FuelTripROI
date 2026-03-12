@@ -41,7 +41,7 @@ export function FuelForm() {
           <p
             className={[
               'text-xs font-medium',
-              priceDiff > 0 ? 'text-brand-600' : 'text-red-500',
+              priceDiff > 0 ? 'text-brand-600 dark:text-brand-400' : 'text-red-500 dark:text-red-400',
             ].join(' ')}
           >
             {priceDiff > 0
@@ -74,7 +74,7 @@ export function FuelForm() {
           hint="Additional fuel carried in canisters"
         />
         {totalRefuel > 0 && (
-          <p className="text-xs text-gray-400">Total: {totalRefuel.toFixed(1)} L</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">Total: {totalRefuel.toFixed(1)} L</p>
         )}
       </div>
     </SectionCard>
