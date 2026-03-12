@@ -34,10 +34,9 @@ import {
   calcRoiPercent,
   calcCostPerKm,
   calculateTrip,
-  calculateTripAnalysis,
   calcTotalRefuelLiters,
 } from '../fuelCalculations'
-import type { VehicleData, TripData, FuelData, ExtraCosts, ActualMeasurements } from '../../types/calculatorTypes'
+import type { VehicleData, TripData, FuelData, ExtraCosts } from '../../types/calculatorTypes'
 
 // ─── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -73,14 +72,6 @@ const extras: ExtraCosts = {
   miscCost: 0,
 }
 
-const actual: ActualMeasurements = {
-  actualFuelUsedL: 0,
-  actualForeignPricePerL: 0,
-  actualLitersRefuelled: 0,
-  overrideFuelUsed: false,
-  overrideForeignPrice: false,
-  overrideLitersRefuelled: false,
-}
 
 // ─── Helper: round to 4 decimals to avoid floating-point noise ────────────────
 const r = (n: number) => Math.round(n * 10000) / 10000
@@ -322,57 +313,5 @@ describe('calculateTrip', () => {
   })
 })
 
-// ─── calculateTripAnalysis ────────────────────────────────────────────────────
-
-describe('calculateTripAnalysis', () => {
-  it('uses estimated values when no overrides are set', () => {
-    const result = calculateTripAnalysis(vehicle, trip, fuel, extras, actual)
-    const baseline = calculateTrip(vehicle, trip, fuel, extras)
-    expect(r(result.savings)).toBe(r(baseline.savings))
-  })
-
-  it('uses actual fuel used when override is set', () => {
-    const actualOverride: ActualMeasurements = {
-      ...actual,
-      overrideFuelUsed: true,
-      actualFuelUsedL: 5, // slightly more than estimated 4.2 L
-    }
-    const result = calculateTripAnalysis(vehicle, trip, fuel, extras, actualOverride)
-    expect(r(result.tripFuelUsedL)).toBe(5)
-  })
-
-  it('uses actual foreign price when override is set', () => {
-    const actualOverride: ActualMeasurements = {
-      ...actual,
-      overrideForeignPrice: true,
-      actualForeignPricePerL: 1.30, // lower than estimated 1.35
-    }
-    const result = calculateTripAnalysis(vehicle, trip, fuel, extras, actualOverride)
-    expect(r(result.foreignRefuelCost)).toBe(52) // 40 × 1.30
-  })
-
-  it('uses actual litres refuelled when override is set', () => {
-    const actualOverride: ActualMeasurements = {
-      ...actual,
-      overrideLitersRefuelled: true,
-      actualLitersRefuelled: 45,
-    }
-    const result = calculateTripAnalysis(vehicle, trip, fuel, extras, actualOverride)
-    expect(result.totalRefuelLiters).toBe(45)
-  })
-
-  it('all three overrides together produce correct result', () => {
-    const actualOverride: ActualMeasurements = {
-      overrideFuelUsed: true,
-      actualFuelUsedL: 5,
-      overrideForeignPrice: true,
-      actualForeignPricePerL: 1.30,
-      overrideLitersRefuelled: true,
-      actualLitersRefuelled: 45,
-    }
-    const result = calculateTripAnalysis(vehicle, trip, fuel, extras, actualOverride)
-    expect(r(result.tripFuelUsedL)).toBe(5)
-    expect(r(result.foreignRefuelCost)).toBe(58.5) // 45 × 1.30
-    expect(result.totalRefuelLiters).toBe(45)
-  })
-})
+// Note: calculateTripAnalysis was replaced by calculateAfterTrip in issue #5.
+// Full coverage of the new after-trip engine lives in afterTripCalculations.test.ts
