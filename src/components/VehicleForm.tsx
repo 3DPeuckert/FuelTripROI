@@ -3,7 +3,7 @@
  */
 
 import { Car } from 'lucide-react'
-import { useCalculatorStore } from '../store/calculatorStore'
+import { useCalculatorStore, defaultVehicle } from '../store/calculatorStore'
 import { SectionCard } from './ui/SectionCard'
 import { InputField } from './ui/InputField'
 import { Toggle } from './ui/Toggle'
@@ -11,8 +11,12 @@ import { Toggle } from './ui/Toggle'
 export function VehicleForm() {
   const { vehicle, updateVehicle } = useCalculatorStore()
 
+  function handleReset() {
+    updateVehicle(defaultVehicle)
+  }
+
   return (
-    <SectionCard title="Vehicle" icon={Car} accent="brand">
+    <SectionCard title="Vehicle" icon={Car} accent="brand" onReset={handleReset}>
       <InputField
         label="Avg. Consumption"
         value={vehicle.averageConsumptionL100km}

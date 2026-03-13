@@ -11,8 +11,9 @@
  *  5. Extra Costs       — tolls, food, parking, etc.
  */
 
+import { useState } from 'react'
 import { Car, MapPin, Fuel, Home, ReceiptText, Info } from 'lucide-react'
-import { useCalculatorStore } from '../store/calculatorStore'
+import { useCalculatorStore, defaultAfterTrip } from '../store/calculatorStore'
 import { SectionCard } from './ui/SectionCard'
 import { InputField } from './ui/InputField'
 import { Toggle } from './ui/Toggle'
@@ -22,11 +23,41 @@ import { formatCurrency, formatLitres } from '../utils/formatters'
 
 function ActualTripSection() {
   const { afterTrip, updateAfterTrip } = useCalculatorStore()
+  const [totalDistanceLocked, setTotalDistanceLocked] = useState(true)
 
   const returnDistanceKm = Math.max(0, afterTrip.actualDistanceTotalKm - afterTrip.distanceToStationKm)
 
+  function handleDistanceToStationChange(v: number) {
+    if (totalDistanceLocked) {
+      updateAfterTrip({ distanceToStationKm: v, actualDistanceTotalKm: v * 2 })
+    } else {
+      updateAfterTrip({ distanceToStationKm: v })
+    }
+  }
+
+  function handleTotalDistanceChange(v: number) {
+    if (v === 0) {
+      setTotalDistanceLocked(true)
+      updateAfterTrip({ actualDistanceTotalKm: afterTrip.distanceToStationKm * 2 })
+    } else {
+      setTotalDistanceLocked(false)
+      updateAfterTrip({ actualDistanceTotalKm: v })
+    }
+  }
+
+  function handleReset() {
+    setTotalDistanceLocked(true)
+    updateAfterTrip({
+      actualConsumptionL100km: defaultAfterTrip.actualConsumptionL100km,
+      vehicleCostPerKm: defaultAfterTrip.vehicleCostPerKm,
+      includeVehicleWear: defaultAfterTrip.includeVehicleWear,
+      distanceToStationKm: defaultAfterTrip.distanceToStationKm,
+      actualDistanceTotalKm: defaultAfterTrip.actualDistanceTotalKm,
+    })
+  }
+
   return (
-    <SectionCard title="Actual Trip Data" icon={Car} accent="blue">
+    <SectionCard title="Actual Trip Data" icon={Car} accent="blue" onReset={handleReset}>
       <InputField
         label="Actual Consumption"
         value={afterTrip.actualConsumptionL100km}
@@ -43,7 +74,7 @@ function ActualTripSection() {
         <InputField
           label="Distance to Station"
           value={afterTrip.distanceToStationKm}
-          onChange={(v) => updateAfterTrip({ distanceToStationKm: v })}
+          onChange={handleDistanceToStationChange}
           unit="km"
           placeholder="30"
           min={0}
@@ -56,14 +87,20 @@ function ActualTripSection() {
         <InputField
           label="Total Actual Distance"
           value={afterTrip.actualDistanceTotalKm}
-          onChange={(v) => updateAfterTrip({ actualDistanceTotalKm: v })}
+          onChange={handleTotalDistanceChange}
+          onUnlock={() => setTotalDistanceLocked(false)}
           unit="km"
           placeholder="60"
           min={0}
           step={0.5}
-          hint="Full round-trip distance actually driven (odometer)"
+          locked={totalDistanceLocked}
+          hint={
+            totalDistanceLocked
+              ? `Auto: ${afterTrip.distanceToStationKm * 2} km — click to override`
+              : 'Full round-trip distance actually driven (odometer)'
+          }
         />
-        {returnDistanceKm > 0 && (
+        {!totalDistanceLocked && returnDistanceKm > 0 && (
           <p className="text-xs text-gray-400 dark:text-gray-500">
             Return leg: {returnDistanceKm.toFixed(1)} km
           </p>
@@ -102,8 +139,16 @@ function TankStateSection() {
   const fuelAtDepartureL = (afterTrip.tankLevelAtDeparturePercent / 100) * afterTrip.tankCapacityL
   const fuelAfterReturnL = (afterTrip.tankLevelAfterReturnPercent / 100) * afterTrip.tankCapacityL
 
+  function handleReset() {
+    updateAfterTrip({
+      tankCapacityL: defaultAfterTrip.tankCapacityL,
+      tankLevelAtDeparturePercent: defaultAfterTrip.tankLevelAtDeparturePercent,
+      tankLevelAfterReturnPercent: defaultAfterTrip.tankLevelAfterReturnPercent,
+    })
+  }
+
   return (
-    <SectionCard title="Tank State" icon={MapPin} accent="brand">
+    <SectionCard title="Tank State" icon={MapPin} accent="brand" onReset={handleReset}>
       <InputField
         label="Tank Capacity"
         value={afterTrip.tankCapacityL}
@@ -168,24 +213,130 @@ function TankStateSection() {
 }
 
 // ─── Section 3: Fuel Purchased Abroad ─────────────────────────────────────────
+//
+// Bidirectional auto-calc within: litersFilled, foreignPricePerL, totalPaidForeign
+// When n-1 of the 3 fields are filled, the remaining one is auto-calculated & locked.
+// Clearing any field in the group unlocks all fields.
+
+type FuelAbroadLocked = 'litersFilled' | 'foreignPricePerL' | 'totalPaidForeign' | null
 
 function FuelAbroadSection() {
   const { afterTrip, updateAfterTrip, currency } = useCalculatorStore()
+  const [lockedField, setLockedField] = useState<FuelAbroadLocked>(null)
 
   const totalForeignFuelL = afterTrip.litersFilled + afterTrip.extraCanisterLiters
-  const calculatedCost = totalForeignFuelL * afterTrip.foreignPricePerL
+
+  /** Unlock: clear the locked field value and set lockedField to null */
+  function unlock(extraUpdates: Partial<typeof afterTrip> = {}) {
+    const clearLocked: Partial<typeof afterTrip> = {}
+    if (lockedField === 'totalPaidForeign') {
+      clearLocked.totalPaidForeign = 0
+      clearLocked.useTotalPaidForeign = false
+    } else if (lockedField === 'foreignPricePerL') {
+      clearLocked.foreignPricePerL = 0
+    } else if (lockedField === 'litersFilled') {
+      clearLocked.litersFilled = 0
+    }
+    updateAfterTrip({ ...clearLocked, ...extraUpdates })
+    setLockedField(null)
+  }
+
+  function handleLitersChange(v: number) {
+    const p = afterTrip.foreignPricePerL
+    const t = afterTrip.totalPaidForeign
+
+    if (v === 0) {
+      // Clearing this field → unlock everything
+      unlock({ litersFilled: 0 })
+      return
+    }
+
+    if (lockedField === 'totalPaidForeign' && p > 0) {
+      updateAfterTrip({ litersFilled: v, totalPaidForeign: v * p, useTotalPaidForeign: true })
+    } else if (lockedField === 'foreignPricePerL' && t > 0) {
+      updateAfterTrip({ litersFilled: v, foreignPricePerL: t / v })
+    } else if (lockedField === null && p > 0 && t === 0) {
+      updateAfterTrip({ litersFilled: v, totalPaidForeign: v * p, useTotalPaidForeign: true })
+      setLockedField('totalPaidForeign')
+    } else if (lockedField === null && t > 0 && p === 0) {
+      updateAfterTrip({ litersFilled: v, foreignPricePerL: t / v })
+      setLockedField('foreignPricePerL')
+    } else {
+      updateAfterTrip({ litersFilled: v })
+    }
+  }
+
+  function handlePriceChange(v: number) {
+    const l = afterTrip.litersFilled
+    const t = afterTrip.totalPaidForeign
+
+    if (v === 0) {
+      unlock({ foreignPricePerL: 0 })
+      return
+    }
+
+    if (lockedField === 'totalPaidForeign' && l > 0) {
+      updateAfterTrip({ foreignPricePerL: v, totalPaidForeign: l * v, useTotalPaidForeign: true })
+    } else if (lockedField === 'litersFilled' && t > 0) {
+      updateAfterTrip({ foreignPricePerL: v, litersFilled: t / v })
+    } else if (lockedField === null && l > 0 && t === 0) {
+      updateAfterTrip({ foreignPricePerL: v, totalPaidForeign: l * v, useTotalPaidForeign: true })
+      setLockedField('totalPaidForeign')
+    } else if (lockedField === null && t > 0 && l === 0) {
+      updateAfterTrip({ foreignPricePerL: v, litersFilled: t / v })
+      setLockedField('litersFilled')
+    } else {
+      updateAfterTrip({ foreignPricePerL: v })
+    }
+  }
+
+  function handleTotalPaidChange(v: number) {
+    const l = afterTrip.litersFilled
+    const p = afterTrip.foreignPricePerL
+
+    if (v === 0) {
+      unlock({ totalPaidForeign: 0, useTotalPaidForeign: false })
+      return
+    }
+
+    if (lockedField === 'foreignPricePerL' && l > 0) {
+      updateAfterTrip({ totalPaidForeign: v, foreignPricePerL: v / l, useTotalPaidForeign: true })
+    } else if (lockedField === 'litersFilled' && p > 0) {
+      updateAfterTrip({ totalPaidForeign: v, litersFilled: v / p, useTotalPaidForeign: true })
+    } else if (lockedField === null && l > 0 && p === 0) {
+      updateAfterTrip({ totalPaidForeign: v, foreignPricePerL: v / l, useTotalPaidForeign: true })
+      setLockedField('foreignPricePerL')
+    } else if (lockedField === null && p > 0 && l === 0) {
+      updateAfterTrip({ totalPaidForeign: v, litersFilled: v / p, useTotalPaidForeign: true })
+      setLockedField('litersFilled')
+    } else {
+      updateAfterTrip({ totalPaidForeign: v, useTotalPaidForeign: true })
+    }
+  }
+
+  function handleReset() {
+    setLockedField(null)
+    updateAfterTrip({
+      litersFilled: defaultAfterTrip.litersFilled,
+      extraCanisterLiters: defaultAfterTrip.extraCanisterLiters,
+      foreignPricePerL: defaultAfterTrip.foreignPricePerL,
+      totalPaidForeign: defaultAfterTrip.totalPaidForeign,
+      useTotalPaidForeign: defaultAfterTrip.useTotalPaidForeign,
+    })
+  }
 
   return (
-    <SectionCard title="Fuel Purchased Abroad" icon={Fuel} accent="amber">
+    <SectionCard title="Fuel Purchased Abroad" icon={Fuel} accent="amber" onReset={handleReset}>
       {/* Quantity */}
       <InputField
         label="Litres Filled (Tank)"
         value={afterTrip.litersFilled}
-        onChange={(v) => updateAfterTrip({ litersFilled: v })}
+        onChange={handleLitersChange}
         unit="L"
         placeholder="40"
         min={0}
         step={0.5}
+        locked={lockedField === 'litersFilled'}
         hint="Litres pumped into the vehicle tank"
       />
       <div className="flex flex-col gap-1">
@@ -210,39 +361,41 @@ function FuelAbroadSection() {
       <InputField
         label="Foreign Price per Litre"
         value={afterTrip.foreignPricePerL}
-        onChange={(v) => updateAfterTrip({ foreignPricePerL: v })}
+        onChange={handlePriceChange}
         unit={`${currency}/L`}
         placeholder="1.35"
         min={0}
         step={0.001}
+        locked={lockedField === 'foreignPricePerL'}
         hint="Pump price at the foreign station"
       />
 
-      {/* Total paid toggle */}
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-col gap-1">
-          <InputField
-            label="Total Paid (Receipt)"
-            value={afterTrip.totalPaidForeign}
-            onChange={(v) => updateAfterTrip({ totalPaidForeign: v })}
-            unit={currency}
-            placeholder={calculatedCost > 0 ? calculatedCost.toFixed(2) : '0'}
-            min={0}
-            step={0.01}
-            disabled={!afterTrip.useTotalPaidForeign}
-            hint={
-              afterTrip.useTotalPaidForeign
-                ? 'Actual amount from your receipt'
-                : `Calculated: ${formatCurrency(calculatedCost, currency)}`
-            }
+      {/* Total paid */}
+      <InputField
+        label="Total Paid (Receipt)"
+        value={afterTrip.totalPaidForeign}
+        onChange={handleTotalPaidChange}
+        unit={currency}
+        placeholder="0"
+        min={0}
+        step={0.01}
+        locked={lockedField === 'totalPaidForeign'}
+        hint={
+          lockedField === 'totalPaidForeign'
+            ? 'Auto-calculated — clear a sibling field to override'
+            : 'Enter receipt total to auto-derive missing field'
+        }
+      />
+
+      {lockedField === null && (
+        <div className="sm:col-span-2">
+          <Toggle
+            checked={afterTrip.useTotalPaidForeign}
+            onChange={(v) => updateAfterTrip({ useTotalPaidForeign: v })}
+            label="Use actual receipt total"
           />
         </div>
-        <Toggle
-          checked={afterTrip.useTotalPaidForeign}
-          onChange={(v) => updateAfterTrip({ useTotalPaidForeign: v })}
-          label="Use actual receipt total"
-        />
-      </div>
+      )}
     </SectionCard>
   )
 }
@@ -256,8 +409,12 @@ function DomesticBaselineSection() {
   const domesticEquivalent = totalForeignFuelL * afterTrip.homePricePerL
   const priceDiff = afterTrip.homePricePerL - afterTrip.foreignPricePerL
 
+  function handleReset() {
+    updateAfterTrip({ homePricePerL: defaultAfterTrip.homePricePerL })
+  }
+
   return (
-    <SectionCard title="Domestic Baseline" icon={Home} accent="brand">
+    <SectionCard title="Domestic Baseline" icon={Home} accent="brand" onReset={handleReset}>
       <div className="sm:col-span-2 flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <InputField
@@ -318,8 +475,19 @@ function AfterTripExtraCostsSection() {
     afterTrip.currencyExchangeFee +
     afterTrip.miscCost
 
+  function handleReset() {
+    updateAfterTrip({
+      tollCost: 0,
+      parkingCost: 0,
+      foodCost: 0,
+      restroomCost: 0,
+      currencyExchangeFee: 0,
+      miscCost: 0,
+    })
+  }
+
   return (
-    <SectionCard title="Extra Costs" icon={ReceiptText} accent="purple">
+    <SectionCard title="Extra Costs" icon={ReceiptText} accent="purple" onReset={handleReset}>
       <InputField
         label="Toll"
         value={afterTrip.tollCost}

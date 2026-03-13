@@ -3,7 +3,7 @@
  */
 
 import { Fuel } from 'lucide-react'
-import { useCalculatorStore } from '../store/calculatorStore'
+import { useCalculatorStore, defaultFuel } from '../store/calculatorStore'
 import { SectionCard } from './ui/SectionCard'
 import { InputField } from './ui/InputField'
 
@@ -13,8 +13,12 @@ export function FuelForm() {
   const priceDiff = fuel.homeFuelPricePerL - fuel.foreignFuelPricePerL
   const totalRefuel = fuel.litersToRefuelVehicle + fuel.extraCanisterLiters
 
+  function handleReset() {
+    updateFuel(defaultFuel)
+  }
+
   return (
-    <SectionCard title="Fuel" icon={Fuel} accent="amber">
+    <SectionCard title="Fuel" icon={Fuel} accent="amber" onReset={handleReset}>
       {/* Prices */}
       <InputField
         label="Home Fuel Price"

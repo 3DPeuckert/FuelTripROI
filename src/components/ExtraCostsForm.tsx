@@ -3,7 +3,7 @@
  */
 
 import { ReceiptText } from 'lucide-react'
-import { useCalculatorStore } from '../store/calculatorStore'
+import { useCalculatorStore, defaultExtraCosts } from '../store/calculatorStore'
 import { SectionCard } from './ui/SectionCard'
 import { InputField } from './ui/InputField'
 import { formatCurrency } from '../utils/formatters'
@@ -19,8 +19,12 @@ export function ExtraCostsForm() {
     extraCosts.currencyExchangeFee +
     extraCosts.miscCost
 
+  function handleReset() {
+    updateExtraCosts(defaultExtraCosts)
+  }
+
   return (
-    <SectionCard title="Extra Costs" icon={ReceiptText} accent="purple">
+    <SectionCard title="Extra Costs" icon={ReceiptText} accent="purple" onReset={handleReset}>
       <InputField
         label="Toll"
         value={extraCosts.tollCost}
