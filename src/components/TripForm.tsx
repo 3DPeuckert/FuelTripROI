@@ -3,15 +3,19 @@
  */
 
 import { MapPin } from 'lucide-react'
-import { useCalculatorStore } from '../store/calculatorStore'
+import { useCalculatorStore, defaultTrip } from '../store/calculatorStore'
 import { SectionCard } from './ui/SectionCard'
 import { InputField } from './ui/InputField'
 
 export function TripForm() {
   const { trip, updateTrip } = useCalculatorStore()
 
+  function handleReset() {
+    updateTrip(defaultTrip)
+  }
+
   return (
-    <SectionCard title="Trip" icon={MapPin} accent="blue">
+    <SectionCard title="Trip" icon={MapPin} accent="blue" onReset={handleReset}>
       <InputField
         label="Distance to Station"
         value={trip.distanceToForeignStationKm}

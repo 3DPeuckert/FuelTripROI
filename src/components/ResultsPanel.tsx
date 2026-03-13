@@ -12,7 +12,8 @@ import {
   formatDistance,
   formatPercent,
 } from '../utils/formatters'
-import type { AfterTripDetail } from '../types/calculatorTypes'
+import type { AfterTripDetail, TripCalculationResult } from '../types/calculatorTypes'
+import { Tooltip } from './ui/Tooltip'
 
 // ─── Individual stat tile ──────────────────────────────────────────────────────
 
@@ -22,9 +23,10 @@ interface StatTileProps {
   sub?: string
   positive?: boolean | null
   icon?: React.ReactNode
+  tooltip?: string
 }
 
-function StatTile({ label, value, sub, positive, icon }: StatTileProps) {
+function StatTile({ label, value, sub, positive, icon, tooltip }: StatTileProps) {
   const bg =
     positive === true
       ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700'
@@ -43,11 +45,50 @@ function StatTile({ label, value, sub, positive, icon }: StatTileProps) {
     <div className={`rounded-xl border-2 p-4 flex flex-col gap-1 ${bg}`}>
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
-        {icon && <span className="text-gray-400 dark:text-gray-500">{icon}</span>}
+        <div className="flex items-center gap-1.5">
+          {tooltip && <Tooltip text={tooltip} wide />}
+          {icon && <span className="text-gray-400 dark:text-gray-500">{icon}</span>}
+        </div>
       </div>
       <span className={`text-xl font-bold ${valueColor}`}>{value}</span>
       {sub && <span className="text-xs text-gray-400 dark:text-gray-500">{sub}</span>}
     </div>
+  )
+}
+
+// ─── Formula tooltip builders ─────────────────────────────────────────────────
+
+function buildNetSavingsTooltip(trip: TripCalculationResult, currency: string): string {
+  return (
+    `Local Equivalent (${formatCurrency(trip.homeRefuelCost, currency)}) ` +
+    `− Paid Abroad (${formatCurrency(trip.foreignRefuelCost, currency)}) ` +
+    `− Trip Overhead (${formatCurrency(trip.tripTotalCost, currency)}) ` +
+    `= ${formatCurrency(trip.savings, currency)}`
+  )
+}
+
+function buildEffectivePriceTooltip(trip: TripCalculationResult, currency: string): string {
+  return (
+    `(Paid Abroad + Trip Overhead) ÷ Total Litres = ` +
+    `(${formatCurrency(trip.foreignRefuelCost, currency)} + ${formatCurrency(trip.tripTotalCost, currency)}) ` +
+    `÷ ${formatLitres(trip.totalRefuelLiters)} ` +
+    `= ${formatPricePerLitre(trip.effectivePricePerL, currency)}`
+  )
+}
+
+function buildRoiTooltip(trip: TripCalculationResult, currency: string): string {
+  return (
+    `Net Savings ÷ Paid Abroad × 100 = ` +
+    `${formatCurrency(trip.savings, currency)} ÷ ${formatCurrency(trip.foreignRefuelCost, currency)} × 100 ` +
+    `= ${formatPercent(trip.roiPercent)}`
+  )
+}
+
+function buildOverheadTooltip(trip: TripCalculationResult, currency: string): string {
+  return (
+    `Travel Fuel Cost + Vehicle Wear + Extra Costs = ` +
+    `${formatCurrency(trip.tripFuelCost, currency)} + ${formatCurrency(trip.vehicleCostTotal, currency)} + ${formatCurrency(trip.extraCostTotal, currency)} ` +
+    `= ${formatCurrency(trip.tripTotalCost, currency)}`
   )
 }
 
@@ -260,6 +301,7 @@ export function ResultsPanel() {
           }
           positive={isWorthIt ? true : false}
           icon={isWorthIt ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+          tooltip={buildNetSavingsTooltip(trip, currency)}
         />
         <StatTile
           label="Effective Price/L"
@@ -267,6 +309,7 @@ export function ResultsPanel() {
           sub="incl. all overhead"
           positive={null}
           icon={<Fuel size={16} />}
+          tooltip={buildEffectivePriceTooltip(trip, currency)}
         />
         <StatTile
           label="Trip ROI"
@@ -274,6 +317,7 @@ export function ResultsPanel() {
           sub="return on investment"
           positive={trip.roiPercent > 0 ? true : trip.roiPercent < 0 ? false : null}
           icon={<Gauge size={16} />}
+          tooltip={buildRoiTooltip(trip, currency)}
         />
         <StatTile
           label="Trip Overhead"
@@ -281,6 +325,7 @@ export function ResultsPanel() {
           sub={isAnalysis ? 'outbound fuel + extras + wear' : 'fuel + extras + wear'}
           positive={null}
           icon={<Route size={16} />}
+          tooltip={buildOverheadTooltip(trip, currency)}
         />
         <StatTile
           label={isAnalysis ? 'Fuel Consumed' : 'Trip Fuel Used'}

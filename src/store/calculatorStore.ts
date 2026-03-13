@@ -22,15 +22,15 @@ import { calculateBreakEven } from '../lib/breakEvenCalculations'
 
 // ─── Default values ────────────────────────────────────────────────────────────
 
-const defaultVehicle: VehicleData = {
+export const defaultVehicle: VehicleData = {
   averageConsumptionL100km: 7,
   tankCapacityL: 50,
   currentTankLevelPercent: 30,
-  vehicleCostPerKm: 0.08,
+  vehicleCostPerKm: 0,
   includeVehicleWear: false,
 }
 
-const defaultTrip: TripData = {
+export const defaultTrip: TripData = {
   distanceToForeignStationKm: 30,
   totalDistanceKm: 60,
   totalDistanceOverridden: false,
@@ -38,14 +38,14 @@ const defaultTrip: TripData = {
   borderWaitTimeMinutes: 0,
 }
 
-const defaultFuel: FuelData = {
+export const defaultFuel: FuelData = {
   homeFuelPricePerL: 1.65,
   foreignFuelPricePerL: 1.35,
   litersToRefuelVehicle: 40,
   extraCanisterLiters: 0,
 }
 
-const defaultExtraCosts: ExtraCosts = {
+export const defaultExtraCosts: ExtraCosts = {
   tollCost: 0,
   parkingCost: 0,
   foodCost: 0,
@@ -57,7 +57,7 @@ const defaultExtraCosts: ExtraCosts = {
 export const defaultAfterTrip: AfterTripData = {
   // Vehicle
   actualConsumptionL100km: 7,
-  vehicleCostPerKm: 0.08,
+  vehicleCostPerKm: 0,
   includeVehicleWear: false,
 
   // Trip distances
